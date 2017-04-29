@@ -2,7 +2,7 @@
 # This nagios plugin comes with ABSOLUTELY NO WARRANTY. You may redistribute copies of the plugin under the terms of the BSD License.
 # Developed by Edgars Simanis - https://github.com/shift8nix/nagios_plugins
 # Checks Mikrotik RouterOS version and optionally compares to current one
-# Depends on: snmpget command (net-snmp-utils); https://lsrel.com website if --track set.
+# Depends on: snmpget command (net-snmp-utils); https://download.mikrotik.com website if --track set.
 
 
 #	#	#	#	ENV AND HELP	#	#	#	#
@@ -35,7 +35,7 @@ Developed by Edgars Simanis - https://github.com/shift8nix/nagios_plugins
 
 Checks Mikrotik RouterOS version and optionally compares to current one
 
-Depends on: Linux net-snmp-utils; https://lsrel.com website if --track set.
+Depends on: Linux net-snmp-utils; http://download.mikrotik.com website if --track set.
 "; }
 
 # Function - describe usage
@@ -80,12 +80,12 @@ Plugin specific options
   --debug		debug plugin with: bash set -x
   -V, --version		display package version number	
   -H, --hostname	hostname or ip address, non-optional
-  --track		Enable version tracking using lsrel.com []
+  --track		Enable version tracking using download.mikrotik.com []
   --dc, --desired_channel	Set RouterOS desired channel if --track used [auto] (current|testing|bugfix)
 
 Customize return codes used (0-Ok, 1-Warning, 2-Critical, 3-Unknown)
   --r1, --return_if_not_current		Return code if version not current [1] (0|1|2|3)
-  --r2, --return_if_maybe		Return code if --track set and lsrel.com down [0] (0|1|2|3)
+  --r2, --return_if_maybe		Return code if --track set and download.mikrotik.com down [0] (0|1|2|3)
   --r3, --return_if_no_result		Return code if snmp not reachable [3] (0|1|2|3)
 
 Custom OIDs if default don't work
@@ -185,7 +185,7 @@ while test -n "$1"; do
 		track_version="yes"
 		;;		
   	--dc|--desired_channel)
-		if [[ $2 =~ ^bugfix$|^current$|^testing$ ]]; then		
+		if [[ $2 =~ ^bugfix$|^current$|^testing$|^stable$ ]]; then		
 			desired_channel=$2
 		else
 			echo "!!!  Unknown option: $1 $2  Use: --help"; exit 3
@@ -268,10 +268,20 @@ metric=$(echo $ros_version | grep -o '^[[:digit:]]*\.[[:digit:]]*')
 if [[ "$desired_channel" != "" ]]; then
 	ros_channel=$desired_channel # If --desired_channel set - use that
 else
-	ros_channel=$(echo $result | grep -E -o 'testing|bugfix|current' ) # Else find it out from snmp response
+	ros_channel=$(echo $result | grep -E -o 'stable|testing|bugfix|current' ) # Else find it out from snmp response
 fi
 
-
+case $ros_channel in
+	bugfix)
+		channel_path="LATEST.5"
+	;;
+	stable)
+		channel_path="LATEST.6"
+	;;
+	*)
+	# not implemented
+	;;
+esac
 
 # If result valid and --track not set
 if [[ "$result" =~ $response_regex ]] && [[ $track_version == "no" ]]; then
@@ -281,21 +291,21 @@ if [[ "$result" =~ $response_regex ]] && [[ $track_version == "no" ]]; then
 
 
 # If result valid and --track set
-elif [[ "$result" =~ $response_regex ]] && [[ $track_version == "yes" ]]; then
+elif [[ "$result" =~ $response_regex ]] && [[ $track_version == "yes" ]] && [[ -n $channel_path ]]; then
 
-	# Get current version from lsrel.com
-	current_ver=$(curl -s --max-time 2 https://$ros_channel.routeros.lsrel.com) || { echo "MAYBE CURRENT: $result | ver=$metric"; exit $return_if_maybe; }
+	# Get current version from mikrotik.com
+	current_ver=$(curl -s --max-time 2 https://upgrade.mikrotik.com/routeros/${channel_path} | awk '{print $1}' ) || { echo "MAYBE CURRENT: $result | ver=$metric"; exit $return_if_maybe; }
 
 	if [[ "$current_ver" == $ros_version ]]; then # If both the same
 	        echo "CURRENT: $result | ver=$metric"
        		exit 0
 
-	elif [[ "$current_ver" == "" ]] || [[ ! $current_ver =~ $ros_ver_regex ]];then # If response from lsrel.com empty or does not match regex
+	elif [[ "$current_ver" == "" ]] || [[ ! $current_ver =~ $ros_ver_regex ]];then # If response from download.mikrotik.com empty or does not match regex
                 echo "MAYBE CURRENT: $result | ver=$metric"
                 exit $return_if_maybe
 
 	else
-		echo "NOT CURRENT: NEW=\"$current_ver($ros_channel)\" $result | ver=$metric" # Else response from lsrel.com must be ok and version newer(?)
+		echo "NOT CURRENT: NEW=\"$current_ver($ros_channel)\" $result | ver=$metric" # Else response from download.mikrotik.com must be ok and version newer(?)
                 exit $return_if_not_current
 	fi	
 
