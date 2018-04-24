@@ -294,7 +294,7 @@ if [[ "$result" =~ $response_regex ]] && [[ $track_version == "no" ]]; then
 elif [[ "$result" =~ $response_regex ]] && [[ $track_version == "yes" ]] && [[ -n $channel_path ]]; then
 
 	# Get current version from mikrotik.com
-	current_ver=$(curl -s --max-time 2 https://upgrade.mikrotik.com/routeros/${channel_path} | awk '{print $1}' ) || { echo "MAYBE CURRENT: $result | ver=$metric"; exit $return_if_maybe; }
+	current_ver=$(curl -s --max-time 2 https://download.mikrotik.com/routeros/${channel_path} | awk '{print $1}' ) || { echo "MAYBE CURRENT: $result | ver=$metric"; exit $return_if_maybe; }
 
 	if [[ "$current_ver" == $ros_version ]]; then # If both the same
 	        echo "CURRENT: $result | ver=$metric"
